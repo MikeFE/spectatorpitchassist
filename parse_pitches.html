@@ -1,0 +1,136 @@
+<html>
+<head>
+    <title>Baseball pitching helper</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <link href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u" crossorigin="anonymous">
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js" integrity="sha384-Tc5IQib027qvyjSMfHjOMaLkfuWVxZxUPnCJA7l2mCWNIpG9mGCD8wGNIcPD7Txa" crossorigin="anonymous"></script>
+</head>
+
+<body>
+    <table id="pitches" class="table">
+        <thead>
+            <tr>
+                <th>Pitcher</th>
+                <th>Batter</th>
+                <th>Pitch type</th>
+                <th>Pitch speed (mph)</th>
+                <th>Pitch result</th>
+            </tr>
+        </thead>
+
+        <tbody>
+        </tbody>
+    </table>
+        
+</body>
+
+<script>
+    // Given a pitch type abbreviation, return the full name of the pitch type.
+    function get_pitch_name(pitch_abbrev) {
+        // Note: didn't see sinker at http://www.fangraphs.com/library/pitch-type-abbreviations-classifications/
+        //       but I saw it in my live game proof-of-concept tests with a python script.
+        switch (pitch_abbrev) {
+            case 'FA': return 'Fastball';
+            case 'FF': return 'Four-seam fastball';
+            case 'FT': return 'Two-seam fastball';
+            case 'SI': return 'Sinker';
+            case 'FC': return 'Cutter';
+            case 'SL': return 'Slider';
+            case 'CH': return 'Changeup'; // Is there an abbrev for circle changeup?
+            case 'KC': return 'Knuckle Curveball';
+            case 'KN': return 'Knuckleball';
+            case 'EP': return 'Eephus';
+            // Multiple abbreviations for one pitch type apparently
+            case 'CB': case 'CU': return 'Curveball';            
+            case 'UN': case 'XX': return 'Unidentified';
+            case 'PO': case 'FO': return 'Pitch out';
+            // TODO: What about forkball, screwball, slurve, etc.?
+
+            default: return 'Unknown pitch type specified: ' + pitch_abbrev;
+        }
+    }
+
+    // Return the full pitch outcome given an abbreviation of it
+    function get_pitch_outcome_name(outcome_abbrev, desc) {
+        switch (outcome_abbrev) {
+            case 'S':
+                if (desc === 'Foul')
+                    return 'Foul';
+                return 'Strike';
+
+            case 'B': return 'Ball';
+            case 'X': return 'Hit';
+            default: return 'Unknown pitch outcome: ' + outcome_abbrev;
+        }
+    }
+
+    // Return a map of player ids -> player full names
+    function get_players(url) {
+        var all_players = {};
+
+        $.get(url, function(data) {
+            var players = data.getElementsByTagName('player');
+
+            for (var i = 0; i < players.length; i++) {
+                var full_name = players[i].getAttribute('first') + ' ' + players[i].getAttribute('last');
+                var id = players[i].getAttribute('id');
+
+                all_players[id] = full_name;
+            }
+        });
+
+        return all_players;
+    }
+
+    // Add received pitches to the pitches table
+    function add_pitches(pitches) {
+        for (var i = 0; i < pitches.length; i++) {
+            var pitch = pitches[i];
+
+            // TODO: worth it to make this a loop?
+            var row = '<tr><td>' + pitch[0] + '</td>';
+            row += '<td>' + pitch[1] + '</td>';
+            row += '<td>' + get_pitch_name(pitch[2]) + '</td>';
+            row += '<td>' + pitch[3] + '</td>';
+            row += '<td>' + get_pitch_outcome_name(pitch[4], pitch[5]) + '</td></tr>';
+
+            $('#pitches > tbody').append(row);
+        }
+    }
+
+    // Download the pitches from an inning and add the info to our pitches table
+    function get_pitches(url, players) {
+        var results = [];
+
+        $.get(url, function(data) {
+            var at_bats = data.getElementsByTagName('atbat');
+
+            for (var i = 0; i < at_bats.length; i++) {
+                var pitches = at_bats[i].getElementsByTagName('pitch');
+
+                var pitcher_name = players[at_bats[i].getAttribute('pitcher')];
+                var batter_name  = players[at_bats[i].getAttribute('batter')];
+
+                for (var j = 0; j < pitches.length; j++) {
+                    var pitch = pitches[j];
+                    var pitch_type = pitch.getAttribute('pitch_type');
+                    var pitch_speed = pitch.getAttribute('start_speed');
+                    var pitch_result = pitch.getAttribute('type');
+                    var pitch_desc = pitch.getAttribute('des');
+
+                    results.push([pitcher_name, batter_name, pitch_type, pitch_speed, pitch_result, pitch_desc]);
+                }
+            }
+
+            add_pitches(results);
+        });
+    }
+
+    var players_url = 'http://gd2.mlb.com/components/game/mlb/year_2016/month_08/day_19/gid_2016_08_19_tormlb_clemlb_1/players.xml';
+    var players = get_players(players_url); // what if this request takes a long time? it'll break get_pitches since it's called immediately..
+
+    var inning_url = 'http://gd2.mlb.com/components/game/mlb/year_2016/month_08/day_19/gid_2016_08_19_tormlb_clemlb_1/inning/inning_2.xml';
+    get_pitches(inning_url, players);
+</script>
+
+</html>
